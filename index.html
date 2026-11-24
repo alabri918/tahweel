@@ -375,7 +375,7 @@ function render(v){
   if(key!==drawn||shown>v.words.length){drawn=key;shown=0;buf=[];fresh=false;input=null;rows.replaceChildren(...(key?[row(v.a)]:[]))}
   const seq=[v.a,...v.words];
   for(;key&&shown<v.words.length;shown++){const r=row(seq[shown+1],norm(seq[shown]));input?rows.insertBefore(r,input):rows.append(r);buf=[];fresh=false}
-  if(mine()){if(!input){input=el('div','row');input.id='input';rows.append(input)}input.classList.remove('bad');drawInput()}
+  if(mine()||!PLAYER&&v.phase==='play'){if(!input){input=el('div','row');input.id='input';rows.append(input)}input.classList.remove('bad');drawInput()}
   else if(input){input.remove();input=null}
   $('kb').hidden=!mine();
   $('go').hidden=!(v.phase==='ready'&&v.turn===myId);
@@ -446,6 +446,12 @@ function hostMsg(c,d){
   }
   if(!c.pid||c.pid!==S.turn||!c.local&&conns.get(c.pid)!==c) return;
   if(d.t==='go'&&S.phase==='ready'){[S.a,S.b]=pick();S.words=[];S.n++;S.t0=Date.now();S.phase='play';return sync()}
+  if(d.t==='type'){
+    if(S.phase!=='play'||d.n!==S.n||d.i!==S.words.length||!input||mine()) return;
+    buf=[...String(d.b||'')].filter(ch=>/[ء-غف-ي]/.test(ch)).slice(0,norm(S.b).length);drawInput();bottom();
+    input.classList.remove('bad');if(d.bad){void input.offsetWidth;input.classList.add('bad')}
+    return;
+  }
   if(d.t==='word'&&S.phase==='play'&&d.n===S.n&&d.i===S.words.length){
     const raw=String(d.w||''), w=norm(raw), last=S.words.length?S.words[S.words.length-1][0]:norm(S.a);
     if(!legal(w,last)) return sync();
@@ -608,7 +614,8 @@ function player(){
 }
 
 /* ---------- الكتابة ---------- */
-function reject(){input.classList.remove('bad');void input.offsetWidth;input.classList.add('bad');fresh=true}
+function live(bad){if(PLAYER) send({t:'type',b:buf.join(''),bad:!!bad,n:V.n,i:V.words.length})}
+function reject(){live(true);input.classList.remove('bad');void input.offsetWidth;input.classList.add('bad');fresh=true}
 function enter(){
   if(V&&V.phase==='ready'&&V.turn===myId) return send({t:'go'});
   if(!mine()||!input) return;
@@ -621,9 +628,9 @@ function letter(ch){
   if(!mine()||!input) return;
   if(clean()) buf=[];
   if(buf.length<norm(V.b).length) buf.push(ch);
-  drawInput();bottom();
+  drawInput();bottom();live();
 }
-function back(){if(!mine()||!input) return;clean();buf.pop();drawInput()}
+function back(){if(!mine()||!input) return;clean();buf.pop();drawInput();live()}
 
 const KEYS=['ضصثقفغعهخحج','شسيبلاتنمكط','ذدءئؤرىةوزظ'];
 const kb=$('kb');
