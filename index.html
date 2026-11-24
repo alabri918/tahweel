@@ -82,6 +82,14 @@ h1 b{color:var(--hot);white-space:nowrap}
 [data-phase=champion] #cuph{font-size:clamp(34px,9vw,64px)}
 #cupb{flex:none;display:flex;gap:10px;margin-top:8px}#cupb button{height:56px;border-radius:12px;font-size:20px;padding:0 30px;background:var(--deep)}#cupb #cupgo{background:var(--hot);color:var(--ink);box-shadow:inset 0 -4px 0 var(--hot-edge);min-width:200px}
 .who .sc{font-size:26px;line-height:1.1}.res.win{color:var(--hot)}
+.addf{display:flex;gap:6px;flex:none;width:min(320px,80vw)}#side .addf{width:100%}.player .addf,[data-mode=cup] #side .addf{display:none}
+.addf input{flex:1;min-width:0;height:48px;border-radius:10px;border:2px solid var(--line);background:var(--deep);color:#fff;font:inherit;font-size:18px;text-align:center;outline:0;user-select:text;-webkit-user-select:text}
+.addf input:focus{border-color:#fff}.addf input.bad{border-color:var(--hot)}
+.addf button{width:52px;flex:none;border-radius:10px;background:#fff;color:var(--ink);font-size:26px;line-height:1}
+#side .addf input{height:38px;font-size:16px}#side .addf button{width:38px;font-size:22px}
+@media (max-width:640px){#side .addf button{width:30px}#side .addf input{padding:0 2px}}
+@media (hover:hover) and (pointer:fine){#kb{display:none}}
+@media (max-height:620px){#qr{width:34vh}#lobby{gap:9px}#code{font-size:30px}}
 #qr2w{flex:none;text-align:center;font-size:20px;direction:ltr}#qr2{width:132px;margin:8px auto 2px;padding:7px;border-radius:10px}
 .player #qr2w,.player #skip,.player #reset,.player #qr,.player #code,.player #start{display:none}
 [data-phase=ready] #time,[data-phase=ready] #count{opacity:.5}
@@ -100,6 +108,7 @@ h1 b{color:var(--hot);white-space:nowrap}
   <div id="qr"></div>
   <div id="code"></div>
   <div id="names"></div>
+  <form class="addf" autocomplete="off"><input maxlength="14" aria-label="الاسم"><button aria-label="إضافة">+</button></form>
   <div id="mode"><button id="mfree" type="button">حر</button><button id="mcup" type="button">دوري</button></div>
   <button id="start" type="button">ابدأ</button>
 </section>
@@ -121,6 +130,7 @@ h1 b{color:var(--hot);white-space:nowrap}
       <div class="num" id="time" role="timer" aria-label="الوقت">00:00</div>
       <div class="num" id="count" aria-label="الكلمات">0</div>
       <div id="teams"></div>
+      <form class="addf" autocomplete="off"><input maxlength="14" aria-label="الاسم"><button aria-label="إضافة">+</button></form>
       <div id="qr2w"><div id="qr2"></div><div id="code2"></div></div>
       <button id="skip" type="button">التالي</button>
       <button id="reset" type="button">تصفير</button>
@@ -345,6 +355,7 @@ function versus(box,v,host){
 }
 addEventListener('resize',()=>{if(V&&(V.phase==='bracket'||V.phase==='champion')) bracket(V.cup)});
 function render(v){
+  if(!PLAYER){const q=S.players.find(p=>p.id===v.turn);myId=q&&q.local?q.id:null}
   const before=V;V=v;vt0=performance.now()-(v.ms||0);
   const cupv=v.phase==='bracket'||v.phase==='champion';
   document.body.dataset.view=v.phase==='lobby'?'lobby':cupv?'cup':'game';document.body.dataset.mode=v.mode;
@@ -375,12 +386,13 @@ function render(v){
 /* ---------- الجهاز الرئيسي ---------- */
 let S, peer=null, tries=0, doneTimer=0;
 const conns=new Map(), seen=new Map();
+const here=p=>!!p&&(!!p.local||conns.has(p.id));
 const newCode=()=>String(1000+Math.floor(Math.random()*9000));
 const save=()=>store.set('tahweel-host',S);
 const joinUrl=()=>(location.protocol==='https:'?location.href.split('#')[0]:PUBLIC_URL)+'#'+S.code;
 function view(){
   return {phase:S.phase,mode:S.mode||'free',cup:S.cup||null,match:S.match||null,turn:S.turn,n:S.n,a:S.a,b:S.b,words:S.words.map(w=>w[1]),ms:S.phase==='play'?Date.now()-S.t0:S.ms,
-    players:S.players.map(p=>({id:p.id,name:p.name,res:p.res,on:conns.has(p.id)}))};
+    players:S.players.map(p=>({id:p.id,name:p.name,res:p.res,on:here(p)}))};
 }
 function sync(){save();const v=view();render(v);for(const c of conns.values()) try{c.send({t:'state',v})}catch(e){}}
 function pick(){
@@ -402,8 +414,8 @@ function ready(id){S.turn=id;S.phase='ready';S.words=[];S.ms=0;S.a=S.b='';S.n++;
 function advance(from){
   clearTimeout(doneTimer);
   const P=S.players;if(!P.length) return lobby();
-  const any=P.some(p=>conns.has(p.id));
-  for(let k=1;k<=P.length;k++){const i=(from+k+P.length)%P.length;if(any&&!conns.has(P[i].id)) continue;
+  const any=P.some(here);
+  for(let k=1;k<=P.length;k++){const i=(from+k+P.length)%P.length;if(any&&!here(P[i])) continue;
     if(from+k>=P.length) S.round++;
     return ready(P[i].id)}
 }
@@ -432,7 +444,7 @@ function hostMsg(c,d){
     if(old&&old!==c) try{old.close()}catch(e){}
     return sync();
   }
-  if(!c.pid||c.pid!==S.turn||conns.get(c.pid)!==c) return;
+  if(!c.pid||c.pid!==S.turn||!c.local&&conns.get(c.pid)!==c) return;
   if(d.t==='go'&&S.phase==='ready'){[S.a,S.b]=pick();S.words=[];S.n++;S.t0=Date.now();S.phase='play';return sync()}
   if(d.t==='word'&&S.phase==='play'&&d.n===S.n&&d.i===S.words.length){
     const raw=String(d.w||''), w=norm(raw), last=S.words.length?S.words[S.words.length-1][0]:norm(S.a);
@@ -467,9 +479,14 @@ function host(){
   if(!S||!Array.isArray(S.players)||!S.code) S={code:newCode(),players:[],phase:'lobby',turn:null,n:0,a:'',b:'',words:[],ms:0,round:0,level:null};
   drawQR();render(view());startPeer();
   if(S.phase==='done') doneTimer=setTimeout(proceed,5000);
-  $('start').addEventListener('click',()=>{S.round=0;S.level=null;if(S.mode==='cup'){for(const p of S.players) p.res=[];buildCup();toBracket()}else advance(-1)});
+  $('start').addEventListener('click',e=>{e.currentTarget.blur();S.round=0;S.level=null;if(S.mode==='cup'){for(const p of S.players) p.res=[];buildCup();toBracket()}else advance(-1)});
   $('mfree').addEventListener('click',()=>{S.mode='free';sync()});$('mcup').addEventListener('click',()=>{S.mode='cup';sync()});
-  $('cupgo').addEventListener('click',startMatch);
+  $('cupgo').addEventListener('click',e=>{e.currentTarget.blur();startMatch()});
+  for(const f of document.querySelectorAll('.addf')) f.addEventListener('submit',e=>{
+    e.preventDefault();const t=f.querySelector('input'),name=t.value.trim();
+    if(!name||S.players.length>=20) return shake(t);
+    S.players.push({id:'h'+Date.now().toString(36)+Math.floor(Math.random()*1e6).toString(36),name,res:[],local:true});t.value='';t.focus();sync();
+  });
   $('cupno').addEventListener('click',()=>{if(S.phase==='champion'||confirm('إلغاء؟')) lobby()});
   $('skip').addEventListener('click',e=>{e.currentTarget.blur();skip()});
   $('reset').addEventListener('click',e=>{e.currentTarget.blur();if(!confirm('تصفير؟')) return;for(const p of S.players) p.res=[];lobby()});
@@ -487,7 +504,7 @@ function nextMatch(c){
   return null;
 }
 function buildCup(){
-  const P=S.players.filter(p=>conns.has(p.id)), ids=P.map(p=>p.id);
+  const P=S.players.filter(here), ids=P.map(p=>p.id);
   for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]]}
   const B=cupSize(ids.length),pairs=B/2,byes=B-ids.length;
   const order=pairs===1?[0]:Array.from({length:pairs/2},(_,k)=>[k,pairs/2+k]).flat();
@@ -537,7 +554,9 @@ function skip(){
 
 /* ---------- التلفون ---------- */
 let P={code:'',name:'',peer:null,conn:null,retry:0,last:0,in:false};
-function send(m){try{P.conn&&P.conn.open&&P.conn.send(m)}catch(e){}}
+function send(m){
+  if(!PLAYER) return hostMsg({local:true,pid:myId,send(){}},m);
+  try{P.conn&&P.conn.open&&P.conn.send(m)}catch(e){}}
 function retry(){clearTimeout(P.retry);if(P.in) P.retry=setTimeout(link,2500)}
 function link(){
   if(!P.in) return;
@@ -582,7 +601,6 @@ function player(){
     store.set('tahweel-name',P.name);store.set('tahweel-code',P.code);document.activeElement.blur();
     P.in=true;V=null;drawn='';document.body.classList.add('wait');link();
   });
-  $('go').addEventListener('click',()=>send({t:'go'}));
   if(fixed&&store.get('tahweel-code')===hash&&$('jname').value) $('join').requestSubmit();
   setInterval(()=>{if(!P.in||!P.conn) return;send({t:'ping'});
     if(P.last&&Date.now()-P.last>11000){P.last=Date.now();document.body.classList.add('wait');link()}},4000);
@@ -632,6 +650,7 @@ addEventListener('keydown',e=>{
 });
 setInterval(()=>{if(V&&V.phase==='play') tick()},200);
 PLAYER?player():host();
+$('go').addEventListener('click',e=>{e.currentTarget.blur();send({t:'go'})});
 addEventListener('hashchange',()=>location.reload());
 </script>
 </body>
